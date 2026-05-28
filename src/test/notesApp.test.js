@@ -1,78 +1,186 @@
 const request = require('supertest');
+const { app, resetContacts } = require('../app');
 
-const app = require('../notesApp');
+beforeEach(() => {
+  resetContacts();
+});
 
-describe('Notes API', () => {
+describe('Exercise 6 API', () => {
 
-  describe('GET /api/notes', () => {
+  describe('Email validation', () => {
 
-    it('devuelve status 200 y un array', async () => {
-
-      const res = await request(app).get('/api/notes');
-
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-
-    });
-
-  });
-
-  describe('GET /api/notes/:id', () => {
-
-    it('devuelve la nota correcta', async () => {
-
-      const res = await request(app).get('/api/notes/1');
-
-      expect(res.status).toBe(200);
-
-      expect(res.body).toMatchObject({
-        id: 1,
-        text: 'Comprar leche'
-      });
-
-    });
-
-    it('devuelve 404 si no existe', async () => {
-
-      const res = await request(app).get('/api/notes/999');
-
-      expect(res.status).toBe(404);
-      expect(res.body).toHaveProperty('error');
-
-    });
-
-  });
-
-  describe('POST /api/notes', () => {
-
-    it('crea una nota correctamente', async () => {
+    it('rejects invalid email', async () => {
 
       const res = await request(app)
-        .post('/api/notes')
+        .post('/api/contacts')
         .send({
-          text: 'Nueva nota'
-        });
-
-      expect(res.status).toBe(201);
-
-      expect(res.body).toMatchObject({
-        text: 'Nueva nota',
-        done: false
-      });
-
-    });
-
-    it('devuelve 400 si text está vacío', async () => {
-
-      const res = await request(app)
-        .post('/api/notes')
-        .send({
-          text: ''
+          name: 'Test',
+          email: '@'
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/text/i);
+    });
 
+    it('accepts valid email', async () => {
+
+      const res = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Test',
+          email: 'test@example.com'
+        });
+
+      expect(res.status).toBe(201);
+    });
+
+  });
+
+  describe('Duplicate email', () => {
+
+    it('rejects duplicated email', async () => {
+
+      const res = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Otro',
+          email: 'ana@example.com'
+        });
+
+      expect(res.status).toBe(409);
+    });
+
+    it('duplicate email is case insensitive', async () => {
+
+      const res = await request(app)
+        .post('/api/contacts')
+        .send({
+          name: 'Otro',
+          email: 'ANA@EXAMPLE.COM'
+        });
+
+      expect(res.status).toBe(409);
+    });
+
+  });
+
+  describe('Search and filters', () => {
+
+    it('filters by search query', async () => {
+
+      const res = await request(app)
+        .get('/api/contacts?search=ana');
+
+      expect(res.status).toBe(200);
+      expect(res.body.length).toBe(1);
+    });
+
+    it('search is case insensitive', async () => {
+
+      const res = await request(app)
+        .get('/api/contacts?search=ANA');
+
+      expect(res.status).toBe(200);
+      expect(res.body.length).toBe(1);
+    });
+
+    it('filters favorites', async () => {
+
+      const res = await request(app)
+        .get('/api/contacts?favorite=true');
+
+      expect(res.status).toBe(200);
+
+      expect(
+        res.body.every(c => c.favorite === true)
+      ).toBe(true);
+    });
+
+  });
+
+  describe('PATCH favorite', () => {
+
+    it('toggles favorite to true', async () => {
+
+      const res = await request(app)
+        .patch('/api/contacts/1/favorite');
+
+      expect(res.status).toBe(200);
+      expect(res.body.favorite).toBe(true);
+    });
+
+    it('toggles favorite back to false', async () => {
+
+      await request(app)
+        .patch('/api/contacts/2/favorite');
+
+      const res = await request(app)
+        .patch('/api/contacts/2/favorite');
+
+      expect(res.body.favorite).toBe(true);
+    });
+
+    it('returns 404 for invalid id', async () => {
+
+      const res = await request(app)
+        .patch('/api/contacts/999/favorite');
+
+      expect(res.status).toBe(404);
+    });
+
+  });
+
+  describe('PUT improved', () => {
+
+    it('updates contact name', async () => {
+
+      const res = await request(app)
+        .put('/api/contacts/1')
+        .send({
+          name: 'Nuevo Nombre'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.name).toBe('Nuevo Nombre');
+    });
+
+    it('rejects invalid email on update', async () => {
+
+      const res = await request(app)
+        .put('/api/contacts/1')
+        .send({
+          email: 'correo-malo'
+        });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects duplicated email on update', async () => {
+
+      const res = await request(app)
+        .put('/api/contacts/1')
+        .send({
+          email: 'luis@example.com'
+        });
+
+      expect(res.status).toBe(409);
+    });
+
+  });
+
+  describe('Error middleware', () => {
+
+    it('returns json 404', async () => {
+
+      const res = await request(app)
+        .get('/api/ruta-que-no-existe');
+
+      expect(res.status).toBe(404);
+
+      expect(
+        res.headers['content-type']
+      ).toMatch(/json/);
+
+      expect(res.body).toHaveProperty('error');
     });
 
   });
