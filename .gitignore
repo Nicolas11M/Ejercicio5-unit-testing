@@ -1,0 +1,4 @@
+node_modules
+
+src/notesApp.js
+src/test/notesApp.test.js
